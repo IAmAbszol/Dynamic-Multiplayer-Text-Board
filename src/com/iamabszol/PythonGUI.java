@@ -5,6 +5,8 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.Random;
 
+//import py4j.GatewayServer;
+
 public class PythonGUI {
 
     private int numberOfPlayers = 0;
@@ -14,8 +16,8 @@ public class PythonGUI {
     private Board[] myBoards = null;
     private final int cellBuffer = 0;
     private final int boardBuffer = 0;
-    private final int expander = 10;
-    private final int drawCols = 10;
+    private int expander = 20;
+    private int drawCols = 10;
 
     private JFrame frame = null;
     private JPanel panel = null;
@@ -23,13 +25,21 @@ public class PythonGUI {
     private int[][] text_boards = null;
     private int[] test_genes = null;
 
-    public PythonGUI(int numberOfPlayers, int boardWidth, int boardHeight) {
+    // removed constructor as Py4J requires initialize through app
+
+    public void setup(int numberOfPlayers, int boardWidth, int boardHeight, int expander, int drawCols) {
         this.numberOfPlayers = numberOfPlayers;
         this.boardWidth = boardWidth;
         this.boardHeight = boardHeight;
 
+        // optional
+        if(expander >= 5) {
+        	this.expander = expander;
+        }
+        if(drawCols > 0) {
+        	this.drawCols = drawCols;
+        }
         constructGUI();
-        apply_test();
     }
 
     private void constructGUI() {
@@ -91,12 +101,25 @@ public class PythonGUI {
             for(int g = 0; g < test_genes.length; g++) {
                 test_genes[g] = new Random().nextInt(10);
             }
-            myBoards[i].draw(text_boards, test_genes, 0);
+            myBoards[i].draw(null, test_genes, 0);
         }
+    }
+
+    public Board getBoard(int index) {
+        if(myBoards != null) {
+            if(index < myBoards.length) {
+                return myBoards[index];
+            }
+            System.err.println("Index out of bounds!");
+            return null;
+        }
+        return null;
     }
 
     class Board extends JPanel {
 
+    	String message = null;
+    	
         int width = 0;
         int height = 0;
 
@@ -109,6 +132,27 @@ public class PythonGUI {
             this.height = height;
             setLayout(null);
             setSize(width, height);
+        }
+        
+        // convert byte array to integer matrix, 2d and 1d support
+        // https://stackoverflow.com/questions/36453353/using-py4j-to-send-matrices-to-from-python-to-java-as-int-arrays
+        public int[][] convertToIntegerMatrix2D(byte[] data) {
+        	java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(data);
+        	int n = buf.getInt(), m = buf.getInt();
+        	int[][] matrix = new int[n][m];
+        	for (int i = 0; i < n; ++i)
+                for (int j = 0; j < m; ++j)
+                   matrix[i][j] = buf.getInt();
+        	return matrix;
+        }
+        
+        public int[] convertToIntegerMatrix1D(byte[] data) {
+        	java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(data);
+        	int n = buf.getInt();
+        	int[] matrix = new int[n];
+        	for (int i = 0; i < n; ++i)
+                matrix[i] = buf.getInt();
+        	return matrix;
         }
 
         // python literally has max() to do this =[
@@ -124,6 +168,14 @@ public class PythonGUI {
                 }
             }
             return results[1];
+        }
+        
+        public void drawText(String message) {
+        	this.message = message;
+        	board = null;
+        	genes = null;
+        	score = 0;
+        	repaint();
         }
 
         public void draw(int[][] board, int[] genes, int score) {
@@ -150,7 +202,7 @@ public class PythonGUI {
                     g.setFont(new Font("Arial", Font.BOLD, sizes[s]));
                     String line = "";
                     for (int i = 0; i < board[calcRow].length; i++) {
-                        line = line + " " + board[calcRow][i];
+                        line = line + "\t" + board[calcRow][i];
                     }
                     if (g.getFontMetrics().stringWidth(line) < width && (g.getFontMetrics().getHeight() * (boardHeight + 3)) < height) {
                         bestSize = sizes[s];
@@ -182,14 +234,32 @@ public class PythonGUI {
                     row += g.getFontMetrics().getHeight();
                     g.drawString("Score: " + score, 0, row);
                 }
+            } else {
+                int bestSize = 0;
+                String msg = "Completed or yet to begin";
+                if(message != null) msg = message;
+                for (int s = 0; s < sizes.length; s++) {
+                    g.setFont(new Font("Arial", Font.BOLD, sizes[s]));
+                    if (g.getFontMetrics().stringWidth(msg) < width) {
+                        bestSize = sizes[s];
+                    } else
+                        break;
+                }
+                g.setFont(new Font("Arial", Font.BOLD, bestSize));
+                g.setColor(Color.black);
+                g.drawString(msg, (width / 2) - (g.getFontMetrics().stringWidth(msg) / 2), (height / 2) - (g.getFontMetrics().getHeight() / 2));
             }
 
         }
 
     }
 
+    /*
     public static void main(String[] args) {
-        PythonGUI pg = new PythonGUI(12, 10, 22);
+        // kept name app for directive for any further modification
+        PythonGUI app = new PythonGUI();
+        GatewayServer server = new GatewayServer(app);
+        server.start();
     }
-
+     */
 }
